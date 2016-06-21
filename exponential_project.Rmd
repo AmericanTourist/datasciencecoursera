@@ -1,0 +1,126 @@
+---
+title: "Exponential Distribution vs. Central Limit Theorem"
+author: "Jake Warner"
+date: "June 10, 2016"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Overview  
+This project investigates the exponential distribution in R and compares it with the Central Limit Theorem. Via simulation, plots and explanatory text, we illustrate the properties of the distribution of the mean of 40 exponentials. We then show how this affects the mean and variance as compared with theory.
+
+# Simulations  
+First we calculate the mean of 40 exponentials and compare it with the theoretical mean of 1/lambda and the theoretical variance of 1/lambda. For this project, we are using lambda = 0.2.
+
+```{r 1stSimulation}
+
+require(ggplot2)
+
+# As per the project instructions, we set lambda = 0.2.
+lambda<-0.2
+
+# We will work with 40 exponentials.
+n<-40
+
+# We will do 1000 simulations, as per the project instructions.
+num_sim<-1000
+
+# In order for this work to be reproducible, we set the random seed to my bday.
+set.seed(1982)
+
+# First fill in the 'sample' vector with all of the simulated value means.
+sample_mns<-NULL
+for (i in 1:1000) sample_mns<-c(sample_mns,mean(rexp(n,lambda)))
+
+# Now we calculate the means.
+t_mean<-1/lambda
+hist_mean<-mean(sample_mns)
+```
+
+# Sample Mean versus Theoretical Mean  
+
+```{r PlotHistogram,fig.align="center",fig.cap="Histogram of the simulated means. There are 1000 simulations and each simulation averaged 40 rexp values. The green line denotes the theoretical mean, while the red line denotes the observed mean of the histogram."}
+
+# Now we plot the data as a histogram and draw a vertical line at the sample_mean and the theoretical_mean
+g<-ggplot(data.frame(sample_mns),aes(x = sample_mns)) 
+g<-g+ geom_histogram(color="black",fill="blue",binwidth=.1)
+g<-g+labs(x="Mean",y="Frequency")+ggtitle("Exponential Means for 1000 Simulations of 40 rexp")
+g<-g+ geom_vline(xintercept=t_mean,col="green") + geom_vline(xintercept=hist_mean,col="red")
+g
+```
+The sample mean from the histogram is **`r round(hist_mean,4)`** which is slightly larger than the theoretical mean calculated as 1/lambda, or **`r round(t_mean,4)`**.  
+
+# Sample Variance versus Theoretical Variance  
+
+We will now compare the analytical value of the variance, vs. the theoretical value. We must take into account that there were n=40 values in each simulation.
+
+``` {r CompareVariance}
+
+# Calculate the sample variance.
+sample_var<-var(sample_mns)
+
+# Calculate the theoretical variance and take into account n=40 values.
+t_var<-((1/lambda)/sqrt(n))^2
+
+```
+The sample variance from the histogram is **`r round(sample_var,4)`** which is slightly larger than the theoretical variance calculated as 1/lambda, or **`r round(t_var,4)`**. We can see that 1000 simulations, using 40 data points per simulation provides enough data to confidently state a variance that is very near the theoretical.  
+
+
+
+```{r PlotHistogram2,fig.align="center",fig.cap="Histogram of the simulated means with overlaid standard deviation lines. The blue lines denotes the theoretical standard deviation, while the red lines denotes the observed standard deviation of the histogram."}
+
+# Now we plot the data as a histogram and draw vertical lines at the sample_stdev and the t_stdev
+d<-ggplot(data.frame(sample_mns),aes(x = sample_mns)) 
+d<-d+ geom_histogram(color="black",fill="yellow",binwidth=.1)
+d<-d+labs(x="Mean",y="Frequency")+ggtitle("Exponential Means for 1000 Simulations of 40 rexp")
+d<-d+ geom_vline(xintercept=c(t_mean+.5*sqrt(t_var),t_mean-.5*sqrt(t_var)),col="blue") + geom_vline(xintercept=c(hist_mean+.5*sqrt(sample_var),hist_mean-.5*sqrt(sample_var)),col="red")
+d
+
+```
+
+# Show that the distribution is approximately normal.
+
+If instead of doing 1000 simulations of 40 data points each, and taking the average of each 40 data points... what if we just did 40*1000 data points?
+
+``` {r Simple}
+mn_simple<-rexp(40000,lambda)
+mean(mn_simple)
+```
+This is not close to our 1/lambda of 5 and is in fact larger than the original distribution mean of **`r round(hist_mean,4)`**. By taking multiple simulations of a large number of data points per group, we are seeing the Central Limit Theory work.
+
+If instead of 40 data points per group, we varied the number of data points per group by 10 to 200, and we calculated the mean of each, we would see that we are nearing the theoretical value of 5. This is shown in the plot below. Clearly, this means that our distribution is normal, as the CLT is working as intended.
+
+``` {r LargeData}
+
+varied_mns<-matrix(,nrow=1000,ncol=47)
+dataPointsCol<-0
+
+# Cycle through 1000 simulations for each #n of points for group.
+for (j in seq(from=40, to=500, by=10)){
+    dataPointsCol<-dataPointsCol+1
+for (i in 1:1000) varied_mns[i,dataPointsCol]<-mean(rexp(j,lambda))
+}
+
+# Now calculate the mean of each data point group.
+plot_means<-apply(varied_mns,2,mean)
+plot_means<-cbind(seq(from=40, to=500, by=10),plot_means)
+colnames(plot_means)<-c("DataPoints","Mean")
+```
+
+``` {r bigPlot,fig.align="center",fig.caption="The calculated means for 1000 simulations of x data points per group."}
+# Now we plot the means as a function of the number of data points per simulation, for 1000 sims.
+e<-ggplot(data.frame(plot_means), aes(x=DataPoints, y=Mean))
+e<-e+geom_point()+labs(x="Data Points in the Group",y="Mean")+ggtitle("Increasing Data Points Makes for a Better Mean")
+e
+```
+
+
+
+
+
+
+
+

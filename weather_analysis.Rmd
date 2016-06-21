@@ -1,0 +1,105 @@
+---
+title: "NOAA Storm Database Analysis Project"
+author: "Jake Warner"
+date: "June 4, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+```
+
+## Synopsis  
+The data is read in from the NOAA Storm Database. After reading the data in, we need to tidy it up by take into account all the "B","M","K", and "H" for billions, millions, thousands, and hundreds. We replace them with a numeric value and prepare to multiple them by the amounts for property damage and crop damage. We find that the most harmful weather events are tornados with ~97,000 injuries/fatalities, followed very far behind with excessive heat (8428 injuries/deaths). The most harmful, economically, were floods, hurricanes/typhoons, tornados and storm surges.
+
+## Data Processing  
+The data is read into R after downloading from the NOAA website.
+
+```{r}
+# Storm data (47MB)
+fileUrl<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+
+if (!file.exists("data.zip")){
+  download.file(fileUrl,"data.zip")
+}
+
+# Read into storm_data object
+storm_data<-read.csv("data.zip")
+```
+
+Once the data has been read in, we first look at the fatalities and injuries in columns 23 and 24 and total them together. We then aggregate the deaths and injuries by event type and order them from highest first.
+
+```{r byHealth}
+by_health<-aggregate(storm_data[,23]+storm_data[,24],by=list(storm_data[,8]),sum,na.rm=TRUE)
+by_health<-by_health[order(by_health$x,decreasing=TRUE),]
+colnames(by_health)<-c("EventType","DeathsAndInjuries")
+```
+
+In order to look at the property and crop damage, we need to work with the codes provided such as "B" for billions and "M" for millions. I then create a new subset of the storm data and add in a property and crop damage column in dollars. 
+
+``` {r damage}
+
+#storm_data<-storm_data[order(storm_data$)]
+# Replace the codes with actually numbers to be multiplied later
+prop_damage<-storm_data[,c(8,25:28)]
+
+# First fix the property damage ones.
+prop_damage$PROPDMGEXP<-gsub("H",100,prop_damage$PROPDMGEXP,ignore.case=TRUE)
+prop_damage$PROPDMGEXP<-gsub("K",1000,prop_damage$PROPDMGEXP,ignore.case=TRUE)
+prop_damage$PROPDMGEXP<-gsub("M","1000000",prop_damage$PROPDMGEXP,ignore.case=TRUE)
+prop_damage$PROPDMGEXP<-gsub("B","1000000000",prop_damage$PROPDMGEXP,ignore.case=TRUE)
+
+# Then fix the crop damages ones.
+prop_damage$CROPDMGEXP<-gsub("H",100,prop_damage$CROPDMGEXP,ignore.case=TRUE)
+prop_damage$CROPDMGEXP<-gsub("K",1000,prop_damage$CROPDMGEXP,ignore.case=TRUE)
+prop_damage$CROPDMGEXP<-gsub("M","1000000",prop_damage$CROPDMGEXP,ignore.case=TRUE)
+prop_damage$CROPDMGEXP<-gsub("B","1000000000",prop_damage$CROPDMGEXP,ignore.case=TRUE)
+
+# Now add a new column which takes into account the property and crop damage costs.
+prop_damage$PROPDMGEXP<-as.numeric(prop_damage$PROPDMGEXP)
+prop_damage$CROPDMGEXP<-as.numeric(prop_damage$CROPDMGEXP)
+
+# Replace all NA with 0
+prop_damage[is.na(prop_damage)]<-0
+
+# Multiply all the EXP's by the DMG values and add them together to get a total DOLLAR amount.
+prop_damage$Dollars<-prop_damage$PROPDMG*prop_damage$PROPDMGEXP+prop_damage$CROPDMG*prop_damage$CROPDMGEXP
+```
+
+Finally, we aggregate by event type, sort our data by greatest to least and put it in units of billions for readability.
+
+```{r}
+# Aggregate the property damage by event type and make it by billions so easier to read.
+by_event<-aggregate(prop_damage$Dollars,by=list(prop_damage$EVTYPE),sum,na.rm=TRUE)
+by_event$x<-by_event$x/1000000000
+
+# Order the events by damage.
+by_event<-by_event[order(by_event$x,decreasing=TRUE),]
+colnames(by_event)<-c("EventType","DamageInBillions")
+```
+# Results  
+
+### 1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?  
+For this question, I will add together the total fatalities and the total injuries.
+
+```{r}
+head(by_health,10)
+```
+
+### 2. Across the United States, which types of events have the greatest economic consequences?  
+For this question, I will add together the total property damage and the total crop damage.
+
+```{r}
+head(by_event,10)
+```
+
+Now we will just plot the top 6 events by total damage.
+```{r}
+# Create a top six variable and name them appropriately.
+top_six<-by_event$DamageInBillions[1:6]
+names(top_six)<-by_event$EventType[1:6]
+par(mar=c(13,4,2,2))
+barplot(top_six,las=2, ylab=" Damage in Billions", main="Property and Crop Damage", col="blue")
+```
+  
+*In the above figure, it can clearly be seen that flooding causes the major damage, economically.*

@@ -1,0 +1,92 @@
+---
+title: "Analysis of Tooth Growth Data"
+author: "Jake Warner"
+date: "June 10, 2016"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Overview
+This project investigates tooth growth. Specifically, this study investigates 60 guinea pigs. Each animal received one of three dose levels of vitamin C (0.5, 1, and 2 mg/day) by one of two delivery methods, (orange juice or ascorbic acid (a form of vitamin C and coded as VC).
+
+# Basic Summary of the Tooth Growth Data
+So there are 60 observations and these are split into 2 delivery methods, with each method having 3 dose levels. This makes for 6 datasets to compare. Let's go ahead and just take a look at the data.
+
+```{r LoadingSummary}
+
+require(ggplot2)
+require(reshape2)
+data("ToothGrowth")
+
+# Let's look at the data and how it is structured.
+head(ToothGrowth)
+```
+
+``` {r PlottingBasic, fig.cap="Tooth growth length as a function of the dose for the two different delivery methods, orange juice (OJ) and ascorbic acid (VC)", fig.align="center"}
+
+g<-ggplot(ToothGrowth,aes(x=dose, y=len))+geom_point(aes(color=supp))+ggtitle("Tooth Growth for All Data Points")
+g
+
+```
+So generally, we can say that the OJ method of delivery increases tooth growth rate compared with delivery via ascorbic acid for 0.5 mg/day and 1.0 mg/day, but it is unclear which is better from the 2.0 mg/day.
+
+# Comparison of Tooth Growth by Supplement Type and Dose
+Let's clean up our data by calculating the mean and standard deviation for each 10 points of data in the groups.
+
+``` {r InitialCompare}
+# Aggregate the means and standard deviations of the length based on supp and dose.
+tooth_info<-do.call(cbind,aggregate(ToothGrowth$len,by = list(ToothGrowth$supp,ToothGrowth$dose),FUN=function(x) c( MN = mean(x), SE = sd(x)/sqrt(10))))
+
+# Name the columns.
+colnames(tooth_info)<-c("Supp","Dose","Mean","SE")
+
+# Change the first column back to a factor
+tooth_info<-data.frame(tooth_info)
+tooth_info[,1]<-as.factor(tooth_info[,1])
+levels(tooth_info[,1])<-c("OJ","VC")
+
+# Order first by delivery method and then by dose.
+tooth_info<-tooth_info[order(tooth_info$Supp),]
+tooth_info
+
+```
+Let's just plot this again.
+``` {r PlottingMeans, fig.cap="Tooth growth length as a function of the dose for the two different delivery methods, orange juice (OJ) and ascorbic acid (VC). The points have been shifted by .1 in the Dose axis for clarity.", fig.align="center"}
+
+# The errorbars overlapped, so use position_dodge to move them horizontally
+pd <- position_dodge(0.1) # move them .05 to the left and right
+
+d<-ggplot(tooth_info,aes(x=Dose, y=Mean, color=Supp))+ ggtitle("Tooth Growth Means Comparison")+ geom_errorbar(aes(ymin=Mean-SE,ymax=Mean+SE),width=.1,position=pd)+geom_line(position=pd) + geom_point(position=pd)
+d
+
+```
+
+#### Let's state a null hypothesis *H~0~* that the OJ delivery method shows increased tooth growth length as compared with the ascorbic acid delivery method. Let's do a t-test of the difference between the delivery methods for each dose rate.
+
+``` {r tTest}
+t_values<-data.frame(nrows=3, ncol=2)
+colnames(t_values)<-c("Dose","P-Value")
+t_values[1,1]<-0.5
+t_values[2,1]<-1.0
+t_values[3,1]<-2.0
+t_values[1,2]<-t.test(ToothGrowth$len[1:10],ToothGrowth$len[31:40],paired=FALSE,var.equal=FALSE)$p.value
+t_values[2,2]<-t.test(ToothGrowth$len[11:20],ToothGrowth$len[41:50],paired=FALSE,var.equal=FALSE)$p.value
+t_values[3,2]<-t.test(ToothGrowth$len[21:30],ToothGrowth$len[51:60],paired=FALSE,var.equal=FALSE)$p.value
+t_values
+
+```
+
+
+
+# Conclusions and Necessary Assumptions
+From the above figure we can clearly see that OJ increases tooth length compared with abscorbic acid for Doses of 0.5 mg/day and 1.0 mg/day, with p-values of `r t_values[1,2]` and `r t_values[2,2]`, respectively. However, we must reject our *H~0~* for the 2.0 mg/Day dose as it has a poor p-value of `r t_values[3,2]`.
+
+We needed to make several assumptions for this test:   
+
+1. We have NOT assumed that the data is paired. We have no information to suggest that, so we have not assumed the subjects were the same. This was based on the fact that the explanation of the tooth growth data explicitly stated there were 60 guinea pigs.
+
+2. We assume that the population of guinea pigs for this test (60) is representative of the entire population of guinea pigs and that we did not miss a common discerning trait.
+

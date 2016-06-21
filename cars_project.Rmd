@@ -1,0 +1,120 @@
+---
+title: "Car MPG Analysis - Regression Models Course Project"
+author: "Jake Warner"
+date: "June 17, 2016"
+output: 
+  pdf_document: 
+    fig_caption: yes
+    keep_tex: yes
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+You work for Motor Trend, a magazine about the automobile industry. Looking at a data set of a collection of cars, they are interested in exploring the relationship between a set of variables and miles per gallon (MPG) (outcome). They are particularly interested in the following two questions:
+
+* Is an automatic or manual transmission better for MPG?  
+* Quantify the MPG difference between automatic and manual transmissions?  
+
+
+```{r mtcars, echo=FALSE, results="hide", message=FALSE}
+data(mtcars)
+require(ggplot2)
+require(gridExtra)
+```
+
+``` {r loadCars, results="hide",echo=FALSE}
+# Get an idea of the first few lines of mtcars
+head(mtcars)
+mtcars$trans<-factor(mtcars$am,levels=c(0,1),labels=c("Automatic","Manual"))
+```
+  
+From the plots in Figure 1 (see Appendix) we can clearly see that there is some trend for manual transmission cars to have better gas mileage, but there are some other factors to notice. For example, the number of cylinders affects this gas mileage such that the more cylinders, the worse gas mileage.  
+
+Let's make a hypothesis *H~0~* that gas mileage is better for manual transmission cars. Now we'll test it.  
+
+### Testing the null hypothesis.  
+
+So we will do a simple t.test to see if the mean values for **manual** and **automatic** are significantly different.
+
+```{r tTests, echo=FALSE, results="hide"}
+simple<-t.test(mpg~am,data=mtcars)
+simple
+```
+So we can definitely say, with a p-value of `r round(simple$p.value,4)` that **manual transmission vehicles have better fuel efficiency**, with mean values of `r round(simple$estimate[1],2)` for automatic, and `r round(simple$estimate[2],2)` for manual. However, let's try to go beyond the basics and look at how the other characteristics of vehicle affect the mpg, such as hp, wt, and gears, etc.
+
+### Influence of Other Variables
+
+We'll fit a linear model and look at how it fits the data.  
+``` {r LinearFit, echo=FALSE, results="hide"}
+fit<-lm(mpg~factor(am),data=mtcars)
+summary(fit)
+```
+
+We can see from the summary of our linear fit that the **Intercept is `r round(fit$coefficients[1],4)`** which is the mean value of the automatic transmission MPG. The second coefficient, **`r round(fit$coefficients[2],4)`** is the difference between the mean MPG for manual vs. automatic. This difference, once again, has a p-value of: 0.000285 which deems the difference significant. However, the R^2^ value of .3385 demonstrates that this model does not fully account for all the variance.
+
+Clearly, our model needs to be a multivariable model that takes into account other variables beyond just auto or manual. Therefore, we'll perform a step function to find the most important variables for the linear model.
+
+``` {r stepWise,echo=FALSE,results="hide"}
+## Perform a multivariable stepwise function to find the best linear model.
+slm<-step(lm(mpg~.,data=mtcars))
+```
+
+```{r bestModel,echo=FALSE,results="hide"}
+
+summary(slm)
+
+```
+
+As we can see from the formula, the best regression model takes into account not only manual vs. automatic transmission, but also weight and quarter-mile time. This new function has an R^2^ value of .8497 which shows it accounts for the variance much better than simply just factoring in the transmission *(R^2^=0.3385)*. Let's go ahead and plot the simple linear model and the multivariable model residuals, along with a Q-Q plot to show a normalisation of the residuals after the fit.
+
+
+### Executive Summary  
+So we have demonstrated that there is a signficant difference *(p<0.01)* between the gas mileage for auto vs. manual transmissions. There are several variables, however, weight and quarter-mile time are vital to accurately modelling this as well. We saw this was necessary when we viewed the residuals of the simple model fit as they tended to show a pattern. Meanwhile, the residuals from our multivariable model demonstrated a randomness to the residuals. Our Q-Q plot further demonstrated an approximate normal distribution to the residuals as well.
+
+### Appendix
+
+``` {r 1stPlot, echo=FALSE,fig.align="center", fig.cap="`(a)` The various cars' gas mileage are plotted showing the gas mileage of manual vs. automatic. `(b)` MPG plotted as a function of number cylinders shows a clear trend for decreasing gas mileage."}
+
+# Plot the data and the fit
+g<-ggplot(data=mtcars,aes(x=trans,y=mpg, col=factor(cyl)))
+
+#g<-g + geom_abline(intercept=fit$coefficients[1],slope=fit$coefficients[2], col="red")
+#g<-g+geom_smooth(method="lm",col="red")
+g<-g+ggtitle("Auto vs. Manual")
+g<-g+geom_boxplot(col=c("red","dark green"))
+g<- g + labs(x="Transmission",y="Gas Mileage (mpg)")
+#g<-g+scale_x_discrete(limit = c("Manual", "Automatic"))
+g<-g + geom_point(size=3)
+
+# 2nd Plot showing cyl vs. MPG
+h<-ggplot(data=mtcars,aes(x=factor(cyl),y=mpg,col=trans))
+h<-h+geom_boxplot()
+h<-h+ggtitle("Cylinders")
+h<- h + labs(x="# of Cylinders",y="Gas Mileage (mpg)")
+h<-h + geom_point(size=3)
+
+# Plot them both.
+grid.arrange(g,h,ncol=2)
+
+```  
+
+
+``` {r 4PanelPlot, echo=FALSE,fig.align="center", fig.cap="`(a)` Residuals for the simple model. `(b)` Multivariable model residuals. `(c)` Q-Q plot to show normality of residuals."}
+
+# Plot the residuals vs the fitted data.
+j<-ggplot(x=mpg,y=resid(fit),aes(x=mpg,y=resid(fit)),data=mtcars)
+j<-j+geom_point(size=3)+ggtitle("Simple Model")+geom_hline(yintercept=0,col="red",size=1.5,linetype=2)
+
+l<-ggplot(x=mpg,y=resid(slm),aes(x=mpg,y=resid(slm)),data=mtcars)
+l<-l+geom_point(size=3)+ggtitle("Multivariable Model")+geom_hline(yintercept=0,col="red",size=1.5,linetype=2)
+          
+q<-ggplot(data=mtcars,aes(sample=mpg))
+q<-q+stat_qq()+ggtitle("Q-Q Plot")+labs(y="mpg")
+
+grid.arrange(j,l,q,ncol=2)
+```
